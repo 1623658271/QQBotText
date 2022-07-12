@@ -1,5 +1,7 @@
 import this
 
+import requests
+
 
 class Config:
     # 记录不在哪些群组中使用
@@ -47,3 +49,16 @@ class Config:
         content = file.read().splitlines()
         file.close()
         return content
+
+    def getHuiFuMessageJson(self, message: str, user_id: str, reset_session: bool = False, context: str = ""):
+        params = {
+            'q': message,
+            'app_key': '16c2937c-61b2-4c44-9f9a-d2d8f0411cb0',
+            'user_id': user_id
+        }
+        if reset_session:
+            params['reset_session'] = True
+        if len(context) > 0:
+            params['context'] = context
+        url = 'http://api.ruyi.ai/v1/message'
+        return requests.get(params=params, url=url).text

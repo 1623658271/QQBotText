@@ -13,7 +13,7 @@ nonebot.load_plugins("src/plugins/timework/__init__.py")
 nonebot.load_plugin("nonebot_plugin_songpicker2")
 # nonebot.load_plugin("nonebot_plugin_boardgame")
 # nonebot.load_plugin("nonebot_plugin_cchess")
-# nonebot.load_plugin("nonebot_plugin_setu4")
+nonebot.load_plugin("nonebot_plugin_setu4")
 app = nonebot.get_asgi()
 
 driver = nonebot.get_driver()

@@ -10,7 +10,7 @@ from random import randint
 from .config2 import Config
 
 # 针对戳一戳
-chat_notice = on_notice()
+chat_notice = on_notice(priority=2)
 
 poke_ban_list = {""}
 

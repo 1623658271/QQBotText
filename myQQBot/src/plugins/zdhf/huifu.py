@@ -3,19 +3,20 @@ import random
 import re
 import time
 from nonebot.rule import to_me
+from nonebot.log import logger
 import requests
-from nonebot.typing import T_State
-from nonebot import on_command, on_keyword, on_notice
+from nonebot import on_command, on_keyword, on_notice, on_message
 from nonebot.adapters.onebot.v11 import GroupMessageEvent, Bot, Message, MessageSegment, Event
 from nonebot.plugin.on import on_regex
 from nonebot.params import EventToMe
-from nonebot.permission import SUPERUSER
+from nonebot.params import State, ArgStr, CommandArg
 from .config2 import Config
+from nonebot.typing import T_State
 
 weather = on_keyword({'emo', 'wy'}, block=True, priority=7)
-cici = on_keyword({''}, rule=to_me(), block=True, priority=6)
+cici = on_message(priority=6)
 qh = on_regex(pattern=r"^qh$", priority=7)
-help = on_regex(pattern=r"^功能$", rule=to_me, priority=1)
+help = on_regex(pattern=r"^功能$", rule=to_me(), priority=1)
 
 
 @weather.handle()
@@ -41,71 +42,134 @@ async def handle_first_receive(event: Event):
 
 
 @cici.handle()
-async def sj(event: Event):
-    if len(event.get_session_id().split("_")) == 3:
-        _, group_id, user_id = event.get_session_id().split("_")
-    else:
-        user_id = str(event.get_user_id())
-    if user_id not in Config().getBlack():
-        ansek = str(event.get_message())
-        yuyin = False
-        if ansek.startswith("语音"):
-            yuyin = True
-            ansek = ansek.replace("语音", "")
-        if '天道' in ansek:
-            ansek = ansek.replace('天道', '菲菲')
-        if r'[CQ:face,id=' in ansek:
-            p1 = re.compile(r'[\[](.*?)[\]]', re.S)
-            h = re.findall(p1, ansek)
-            if len(h[0]) == 12:
-                ansek = ansek.replace('[' + h[0] + ']', '{' + f'face:{h[0][11]}' + '}')
-            elif len(h[0]) == 13:
-                ansek = ansek.replace('[' + h[0] + ']', '{' + f'face:{h[0][11]}{h[0][12]}' + '}')
-            elif len(h[0]) == 14:
-                ansek = ansek.replace('[' + h[0] + ']', '{' + f'face:{h[0][11]}{h[0][12]}{h[0][13]}' + '}')
-
-        url = f'http://api.qingyunke.com/api.php?key=free&appid=0&msg={ansek}'
-        k = requests.get(url)
-        hua = json.loads(k.text)
-        #  获取返回json数据中回复的部分(content)
-        ans = hua['content']
-        if '{face:' in ans:
-            yuyin = False
-            p1 = re.compile(r'[{](.*?)[}]', re.S)
-            h = re.findall(p1, ans)
-            if len(h[0]) == 6:
-                ans = ans.replace('{' + h[0] + '}', f'[CQ:face,id={h[0][5]}]')
-            elif len(h[0]) == 7:
-                ans = ans.replace('{' + h[0] + '}', f'[CQ:face,id={h[0][5]}{h[0][6]}]')
-            elif len(h[0]) == 8:
-                ans = ans.replace('{' + h[0] + '}', f'[CQ:face,id={h[0][5]}{h[0][6]}{h[0][7]}]')
-
-        l = '菲菲'
-        m = '{br}'
-        at_ = str(event.get_user_id())
-        if ans == '未获取到相关信息':
-            ans = '未获取到相关信息,你可以@我并发送功能查看我目前拥有的功能'
-        if l in ans:
-            ansl = ans.replace('菲菲', '天道')
-            if m in ansl:
-                ansl = ansl.replace('{br}', '\n')
-            if yuyin:
-                await cici.finish(Message(f'[CQ:tts,text={ansl}]'))
+async def smartReply(event: Event, foo: bool = EventToMe(), state: T_State = State()):
+    global moreContent
+    if foo:
+        msg = str(event.get_message())
+        id = str(event.get_user_id())
+        if len(msg) > 0:
+            if msg == '终止对话':
+                Config().getHuiFuMessageJson(msg, id, True)
+                await cici.finish(MessageSegment.at(id) + "那咱们下次聊吧")
             else:
-                await cici.finish(MessageSegment.at(at_) + Message(f'{ansl}'))
-        elif m in ans:
-            ansm = ans.replace('{br}', '\n')
-            if yuyin:
-                await cici.finish(Message(f'[CQ:tts,text={ansm}]'))
-            else:
-                await cici.finish(MessageSegment.at(at_) + Message(f'{ansm}'))
+                contentJson = json.loads(Config().getHuiFuMessageJson(msg, id))
+                # typed = contentJson['result']['intents'][0]['parameters'].get('service', '无')
+                # more = False
+                # if len(typed) > 0 and typed != '无':
+                #     more = True
+                #     moreContent = check(contentJson, typed)
+                #     logger.info(f"{moreContent}")
+                try:
+                    content = contentJson['result']['intents'][0]['outputs'][1]['property']['text']
+                    emotion = contentJson['result']['intents'][0]['outputs'][1]['property'].get('emotion', 'null')
+                    content += '\n[情感:' + json.loads(requests.get(f'http://fanyi.youdao.com/translate?&doctype=json&type=AUTO&i={emotion}').text)['translateResult'][0][0]['tgt'] + ']'
+                except:
+                    content = '我不理解'
+                #if more:
+                #    await cici.send(moreContent)
+                await cici.finish(MessageSegment.at(id) + content)
         else:
-            if yuyin:
-                await cici.finish(Message(f'[CQ:tts,text={ans}]'))
-            else:
-                await cici.finish(MessageSegment.at(at_) + Message(f'{ans}'))
-    else:
-        await cici.finish(MessageSegment.at(str(user_id)) + "不好意思，你在黑名单中哦！")
+            await cici.finish(MessageSegment.at(id) + "你干嘛~")
+
+    # if foo:
+    #     msg = str(event.get_message())
+    #     if len(msg) == 0:
+    #         await cici.send("你开启了和我的对话,可回复'终止对话'清除短期记忆哦")
+    #     state["msg"] = msg
+
+
+# @cici.got("msg", prompt="你开启了和我的对话,可回复'终止对话'停止哦")
+# async def lianxuduihua(event: Event, state: T_State = State()):
+#     msg = str(state["msg"])
+#     id = str(event.get_user_id())
+#     if msg == '终止对话':
+#         Config().getHuiFuMessageJson(msg, id, True)
+#         await cici.finish(MessageSegment.at(id) + "那咱们下次聊吧")
+#     else:
+#         contentJson = json.loads(Config().getHuiFuMessageJson(msg, id))
+#         typed = contentJson['result']['intents'][0]['parameters']['service']
+#         content = check(contentJson, typed)
+#         await cici.reject(MessageSegment.at(id) + content)
+
+
+# def check(content_json: json, typed: str):
+#     global content
+#     if typed == 'Daily English':
+#         filex = content_json['result']['intents'][0]['outputs'][2]['payload']['text']
+#         filex = filex.replace('"','&quot')
+#         # p1 = re.compile(r'["](.*?)["]', re.S)
+#         # file = re.findall(p1, filex)
+#         #content = f'[CQ:record,url={file[0]}]'
+#         #content = f'[CQ:xml,data={filex}'
+#     return content
+
+
+# @cici.handle()
+# async def sj(event: Event):
+#     if len(event.get_session_id().split("_")) == 3:
+#         _, group_id, user_id = event.get_session_id().split("_")
+#     else:
+#         user_id = str(event.get_user_id())
+#     if user_id not in Config().getBlack():
+#         ansek = str(event.get_message())
+#         yuyin = False
+#         if ansek.startswith("语音"):
+#             yuyin = True
+#             ansek = ansek.replace("语音", "")
+#         if '天道' in ansek:
+#             ansek = ansek.replace('天道', '菲菲')
+#         if r'[CQ:face,id=' in ansek:
+#             p1 = re.compile(r'[\[](.*?)[\]]', re.S)
+#             h = re.findall(p1, ansek)
+#             if len(h[0]) == 12:
+#                 ansek = ansek.replace('[' + h[0] + ']', '{' + f'face:{h[0][11]}' + '}')
+#             elif len(h[0]) == 13:
+#                 ansek = ansek.replace('[' + h[0] + ']', '{' + f'face:{h[0][11]}{h[0][12]}' + '}')
+#             elif len(h[0]) == 14:
+#                 ansek = ansek.replace('[' + h[0] + ']', '{' + f'face:{h[0][11]}{h[0][12]}{h[0][13]}' + '}')
+#
+#         url = f'http://api.qingyunke.com/api.php?key=free&appid=0&msg={ansek}'
+#         k = requests.get(url)
+#         hua = json.loads(k.text)
+#         #  获取返回json数据中回复的部分(content)
+#         ans = hua['content']
+#         if '{face:' in ans:
+#             yuyin = False
+#             p1 = re.compile(r'[{](.*?)[}]', re.S)
+#             h = re.findall(p1, ans)
+#             if len(h[0]) == 6:
+#                 ans = ans.replace('{' + h[0] + '}', f'[CQ:face,id={h[0][5]}]')
+#             elif len(h[0]) == 7:
+#                 ans = ans.replace('{' + h[0] + '}', f'[CQ:face,id={h[0][5]}{h[0][6]}]')
+#             elif len(h[0]) == 8:
+#                 ans = ans.replace('{' + h[0] + '}', f'[CQ:face,id={h[0][5]}{h[0][6]}{h[0][7]}]')
+#
+#         l = '菲菲'
+#         m = '{br}'
+#         at_ = str(event.get_user_id())
+#         if ans == '未获取到相关信息':
+#             ans = '未获取到相关信息,你可以@我并发送功能查看我目前拥有的功能'
+#         if l in ans:
+#             ansl = ans.replace('菲菲', '天道')
+#             if m in ansl:
+#                 ansl = ansl.replace('{br}', '\n')
+#             if yuyin:
+#                 await cici.finish(Message(f'[CQ:tts,text={ansl}]'))
+#             else:
+#                 await cici.finish(MessageSegment.at(at_) + Message(f'{ansl}'))
+#         elif m in ans:
+#             ansm = ans.replace('{br}', '\n')
+#             if yuyin:
+#                 await cici.finish(Message(f'[CQ:tts,text={ansm}]'))
+#             else:
+#                 await cici.finish(MessageSegment.at(at_) + Message(f'{ansm}'))
+#         else:
+#             if yuyin:
+#                 await cici.finish(Message(f'[CQ:tts,text={ans}]'))
+#             else:
+#                 await cici.finish(MessageSegment.at(at_) + Message(f'{ans}'))
+#     else:
+#         await cici.finish(MessageSegment.at(str(user_id)) + "不好意思，你在黑名单中哦！")
 
 
 @qh.handle()

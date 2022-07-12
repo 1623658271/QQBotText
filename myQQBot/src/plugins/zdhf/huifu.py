@@ -60,8 +60,11 @@ async def smartReply(event: Event, foo: bool = EventToMe(), state: T_State = Sta
                 #     moreContent = check(contentJson, typed)
                 #     logger.info(f"{moreContent}")
                 try:
-                    content = contentJson['result']['intents'][0]['outputs'][1]['property']['text']
-                    emotion = contentJson['result']['intents'][0]['outputs'][1]['property'].get('emotion', 'null')
+                    content = contentJson['result']['intents'][0]['outputs'][0]['property']['text']
+                    try:
+                        emotion = contentJson['result']['intents'][0]['outputs'][1]['property'].get('emotion', 'null')
+                    except:
+                        emotion = 'null'
                     content += '\n[情感:' + json.loads(requests.get(f'http://fanyi.youdao.com/translate?&doctype=json&type=AUTO&i={emotion}').text)['translateResult'][0][0]['tgt'] + ']'
                 except:
                     content = '我不理解'
